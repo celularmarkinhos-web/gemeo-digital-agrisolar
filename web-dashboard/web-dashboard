@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gêmeo Digital - Estação Agri-Solar (Doutorado)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js para gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- MQTT.js para recepção via WebSockets -->
+    <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans p-4 md:p-6">
+
+    <div class="max-w-6xl mx-auto space-y-6">
+        <!-- Cabeçalho -->
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-700 pb-4 gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-emerald-400">🌱 Gêmeo Digital: Estação Agri-Solar Autônoma</h1>
+                <p class="text-sm text-slate-400">Programa de Pós-Graduação | Edge AI &amp; Gestão Energética Frugal</p>
+            </div>
+            <div id="connection-status" class="px-4 py-1.5 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                ● Conectando ao Broker...
+            </div>
+        </header>
+
+        <!-- Quadros Principais de Monitoramento -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            
+            <!-- ESTADO PAINEL -->
+            <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-lg space-y-3">
+                <div class="border-b border-slate-700 pb-2">
+                    <h3 class="text-xs font-bold text-amber-400 uppercase tracking-wider">☀️ ESTADO PAINEL</h3>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-center">
+                    <div class="bg-slate-900/50 p-2 rounded border border-slate-700/50">
+                        <span class="text-xs text-slate-400 block">Tensão</span>
+                        <span id="solar-v" class="text-xl font-extrabold text-amber-400">--</span> <span class="text-xs text-slate-400">V</span>
+                    </div>
+                    <div class="bg-slate-900/50 p-2 rounded border border-slate-700/50">
+                        <span class="text-xs text-slate-400 block">Potência</span>
+                        <span id="solar-w" class="text-xl font-extrabold text-amber-400">--</span> <span class="text-xs text-slate-400">W</span>
+                    </div>
+                    <div class="bg-slate-900/50 p-2 rounded border border-slate-700/50">
+                        <span class="text-xs text-slate-400 block">Temperatura</span>
+                        <span id="temp-1" class="text-xl font-bold text-sky-400">--</span> <span class="text-xs text-slate-400">°C</span>
+                    </div>
+                    <div class="bg-slate-900/50 p-2 rounded border border-slate-700/50">
+                        <span class="text-xs text-slate-400 block">Umidade</span>
+                        <span id="hum-1" class="text-xl font-bold text-cyan-400">--</span> <span class="text-xs text-slate-400">%</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ESTADO BATERIA -->
+            <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-lg space-y-3">
+                <div class="border-b border-slate-700 pb-2">
+                    <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-wider">🔋 ESTADO BATERIA</h3>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-center">
+                    <div class="bg-slate-900/50 p-2 rounded border border-slate-700/50">
+                        <span class="text-xs text-slate-400 block">Tensão</span>
+                        <span id="bateria-v" class="text-xl font-extrabold text-emerald-400">--</span> <span class="text-xs text-slate-400">V</span>
+                    </div>
+                    <div class="bg-slate-900/50 p-2 rounded border border-slate-700/50">
+                        <span class="text-xs text-slate-400 block">Consumo</span>
+                        <span id="carga-w" class="text-xl font-extrabold text-emerald-400">--</span> <span class="text-xs text-slate-400">W</span>
+                    </div>
+                    <div class="bg-slate-900/50 p-2 rounded border border-slate-700/50">
+                        <span class="text-xs text-slate-400 block">Temperatura</span>
+                        <span id="temp-2" class="text-xl font-bold text-sky-400">--</span> <span class="text-xs text-slate-400">°C</span>
+                    </div>
+                    <div class="bg-slate-900/50 p-2 rounded border border-slate-700/50">
+                        <span class="text-xs text-slate-400 block">Umidade</span>
+                        <span id="hum-2" class="text-xl font-bold text-cyan-400">--</span> <span class="text-xs text-slate-400">%</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PREVISÃO DO TEMPO & DIAGNÓSTICO DA IA -->
+            <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-lg space-y-3">
+                <div class="border-b border-slate-700 pb-2">
+                    <h3 class="text-xs font-bold text-sky-400 uppercase tracking-wider">🌤️ PREVISÃO DO TEMPO</h3>
+                </div>
+                <div id="weather-box" class="bg-slate-900/60 p-3 rounded-lg border border-slate-700 text-center">
+                    <span id="weather-icon" class="text-3xl block mb-1">☀️</span>
+                    <span id="weather-text" class="text-sm font-semibold text-slate-200">Aguardando dados...</span>
+                </div>
+                <div id="ai-status-box" class="bg-slate-900/60 p-3 rounded-lg border border-emerald-500/50 text-center">
+                    <span class="text-[10px] uppercase font-bold text-slate-400 block">Status da IA na Borda</span>
+                    <span id="ai-status-text" class="text-xs font-medium text-emerald-400">Monitoramento Ativo</span>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Seção do Gráfico Interativo -->
+        <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg space-y-4">
+            <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 border-b border-slate-700 pb-4">
+                <div>
+                    <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider">Histórico de Tensões &amp; Curva Energética</h3>
+                    <p class="text-xs text-slate-400">Visualização temporal com armazenamento de longo prazo (dias/meses)</p>
+                </div>
+                
+                <div class="flex flex-wrap gap-2 text-xs">
+                    <!-- Seletor de Séries de Dados -->
+                    <div class="bg-slate-900 p-1 rounded-lg border border-slate-700 flex items-center space-x-1">
+                        <span class="text-slate-400 px-2">Exibir:</span>
+                        <button onclick="setSeriesFilter('both')" id="series-both" class="px-2.5 py-1 rounded bg-emerald-600 text-white font-medium">Ambos</button>
+                        <button onclick="setSeriesFilter('solar')" id="series-solar" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">Apenas Painel</button>
+                        <button onclick="setSeriesFilter('bateria')" id="series-bateria" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">Apenas Bateria</button>
+                    </div>
+
+                    <!-- Seletor de Períodos Expandido -->
+                    <div class="bg-slate-900 p-1 rounded-lg border border-slate-700 flex items-center space-x-1">
+                        <span class="text-slate-400 px-2">Período:</span>
+                        <button onclick="setPeriodFilter(15)" class="period-btn px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300" data-min="15">15 Min</button>
+                        <button onclick="setPeriodFilter(60)" class="period-btn px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300" data-min="60">1 Hor</button>
+                        <button onclick="setPeriodFilter(360)" class="period-btn px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300" data-min="360">6 Hor</button>
+                        <button onclick="setPeriodFilter(1440)" class="period-btn px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300" data-min="1440">1 Dia</button>
+                        <button onclick="setPeriodFilter(10080)" class="period-btn px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300" data-min="10080">7 Dias</button>
+                        <button onclick="setPeriodFilter(43200)" class="period-btn px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300" data-min="43200">30 Dias</button>
+                        <button onclick="setPeriodFilter(0)" class="period-btn px-2 py-1 rounded bg-emerald-600 text-white" data-min="0">Tudo</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="relative h-72 w-full">
+                <canvas id="energyChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Tabela de Registros de Anomalias e Diagnósticos -->
+        <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg space-y-4">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-700 pb-3">
+                <div class="flex items-center space-x-3">
+                    <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider">Registro de Anomalias e Eventos da IA</h3>
+                    <span id="log-count" class="text-xs bg-slate-700 px-2.5 py-0.5 rounded-full text-slate-300">0 Eventos</span>
+                </div>
+                <!-- Filtro de Período para Tabela -->
+                <div class="flex items-center space-x-3 text-xs">
+                    <span class="text-slate-400">Filtrar Tabela:</span>
+                    <select id="table-period-filter" onchange="filterTableLogs()" class="bg-slate-900 border border-slate-700 text-slate-200 px-2 py-1 rounded">
+                        <option value="0">Todo o Histórico</option>
+                        <option value="15">Últimos 15 minutos</option>
+                        <option value="60">Última 1 hora</option>
+                        <option value="360">Últimas 6 horas</option>
+                        <option value="1440">Último 1 dia (24h)</option>
+                        <option value="10080">Últimos 7 dias</option>
+                        <option value="43200">Últimos 30 dias (1 mês)</option>
+                    </select>
+                    <button onclick="clearLocalStorage()" class="bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 px-2 py-1 rounded text-[10px]">Limpar Histórico</button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs text-slate-300">
+                    <thead class="bg-slate-900 text-slate-400 uppercase tracking-wider border-b border-slate-700">
+                        <tr>
+                            <th class="p-3">Data e Hora</th>
+                            <th class="p-3">Diagnóstico da IA</th>
+                            <th class="p-3">Tensão Bateria / Painel</th>
+                            <th class="p-3">Clima (Temp / Umid)</th>
+                            <th class="p-3">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="events-log-body" class="divide-y divide-slate-700/50 font-mono">
+                        <tr>
+                            <td colspan="5" class="p-4 text-center text-slate-500 italic">Aguardando registro de dados ou anomalias...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script de Processamento e Conexão MQTT -->
+    <script>
+        // Carrega Histórico Persistente do localStorage
+        let rawTelemetryHistory = JSON.parse(localStorage.getItem('agrisolar_telemetry')) || [];
+        let eventLogs = JSON.parse(localStorage.getItem('agrisolar_logs')) || [];
+        
+        rawTelemetryHistory.forEach(item => item.timestamp = new Date(item.timestamp));
+        eventLogs.forEach(item => item.timestamp = new Date(item.timestamp));
+
+        let activeFilterMinutes = 0;
+        let activeSeriesFilter = 'both';
+
+        // Gráfico
+        const ctx = document.getElementById('energyChart').getContext('2d');
+        const energyChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Tensão Bateria (V)',
+                        borderColor: '#34d399',
+                        backgroundColor: '#34d39922',
+                        data: [],
+                        tension: 0.2,
+                        pointRadius: 2
+                    },
+                    {
+                        label: 'Tensão Painel Solar (V)',
+                        borderColor: '#fbbf24',
+                        backgroundColor: '#fbbf2422',
+                        data: [],
+                        tension: 0.2,
+                        pointRadius: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                    x: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } }
+                },
+                plugins: { legend: { labels: { color: '#f1f5f9' } } }
+            }
+        });
+
+        function saveToStorage() {
+            if (rawTelemetryHistory.length > 50000) rawTelemetryHistory.shift();
+            if (eventLogs.length > 5000) eventLogs.pop();
+            
+            localStorage.setItem('agrisolar_telemetry', JSON.stringify(rawTelemetryHistory));
+            localStorage.setItem('agrisolar_logs', JSON.stringify(eventLogs));
+        }
+
+        function clearLocalStorage() {
+            if (confirm("Deseja realmente apagar todo o histórico de dados acumulados no computador?")) {
+                localStorage.removeItem('agrisolar_telemetry');
+                localStorage.removeItem('agrisolar_logs');
+                rawTelemetryHistory = [];
+                eventLogs = [];
+                updateChartDisplay();
+                renderTable();
+            }
+        }
+
+        function updateChartDisplay() {
+            const now = new Date();
+            let filteredData = rawTelemetryHistory;
+
+            if (activeFilterMinutes > 0) {
+                const cutoff = new Date(now.getTime() - (activeFilterMinutes * 60 * 1000));
+                filteredData = rawTelemetryHistory.filter(item => item.timestamp >= cutoff);
+            }
+
+            energyChart.data.labels = filteredData.map(item => {
+                return activeFilterMinutes > 1440 || activeFilterMinutes === 0 ? item.dateTimeLabel : item.timeLabel;
+            });
+            
+            if (activeSeriesFilter === 'solar') {
+                energyChart.data.datasets[0].data = [];
+                energyChart.data.datasets[1].data = filteredData.map(item => item.solar_v);
+            } else if (activeSeriesFilter === 'bateria') {
+                energyChart.data.datasets[0].data = filteredData.map(item => item.bateria_v);
+                energyChart.data.datasets[1].data = [];
+            } else {
+                energyChart.data.datasets[0].data = filteredData.map(item => item.bateria_v);
+                energyChart.data.datasets[1].data = filteredData.map(item => item.solar_v);
+            }
+
+            energyChart.update();
+        }
+
+        function setPeriodFilter(minutes) {
+            activeFilterMinutes = minutes;
+            document.querySelectorAll('.period-btn').forEach(btn => {
+                if (parseInt(btn.getAttribute('data-min')) === minutes) {
+                    btn.className = "period-btn px-2 py-1 rounded bg-emerald-600 text-white font-medium";
+                } else {
+                    btn.className = "period-btn px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300";
+                }
+            });
+            updateChartDisplay();
+        }
+
+        function setSeriesFilter(type) {
+            activeSeriesFilter = type;
+            ['both', 'solar', 'bateria'].forEach(t => {
+                const el = document.getElementById(`series-${t}`);
+                if (t === type) {
+                    el.className = "px-2.5 py-1 rounded bg-emerald-600 text-white font-medium";
+                } else {
+                    el.className = "px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300";
+                }
+            });
+            updateChartDisplay();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('events-log-body');
+            const filterMinutes = parseInt(document.getElementById('table-period-filter').value);
+            const now = new Date();
+
+            let filteredLogs = eventLogs;
+            if (filterMinutes > 0) {
+                const cutoff = new Date(now.getTime() - (filterMinutes * 60 * 1000));
+                filteredLogs = eventLogs.filter(item => item.timestamp >= cutoff);
+            }
+
+            if (filteredLogs.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-500 italic">Nenhum evento registrado no período selecionado.</td></tr>`;
+                document.getElementById('log-count').textContent = "0 Eventos";
+                return;
+            }
+
+            document.getElementById('log-count').textContent = `${filteredLogs.length} Eventos`;
+            tbody.innerHTML = filteredLogs.map(item => {
+                const badgeColor = item.isCritical ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+                return `
+                    <tr class="hover:bg-slate-700/30 border-b border-slate-700/50">
+                        <td class="p-3 text-slate-300">${item.dateTimeStr}</td>
+                        <td class="p-3 font-semibold text-white">${item.status}</td>
+                        <td class="p-3">${item.bateria_v.toFixed(2)}V / ${item.solar_v.toFixed(2)}V</td>
+                        <td class="p-3 text-slate-400">${item.temp.toFixed(1)}°C | ${item.hum.toFixed(1)}%</td>
+                        <td class="p-3"><span class="px-2 py-0.5 rounded border text-[10px] ${badgeColor}">${item.isCritical ? 'ALERTA / ANOMALIA' : 'NORMAL'}</span></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function filterTableLogs() {
+            renderTable();
+        }
+
+        updateChartDisplay();
+        renderTable();
+
+        // Conexão MQTT via WebSockets
+        const statusBadge = document.getElementById('connection-status');
+        const options = { clientId: 'web_' + Math.random().toString(16).substr(2, 8), keepalive: 60 };
+        const client = mqtt.connect('wss://broker.hivemq.com:8884/mqtt', options);
+
+        client.on('connect', () => {
+            statusBadge.textContent = '● Conectado (Ao Vivo)';
+            statusBadge.className = 'px-4 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+            client.subscribe('agrisolar/telemetria');
+        });
+
+        client.on('error', () => {
+            statusBadge.textContent = '● Erro de Conexão';
+            statusBadge.className = 'px-4 py-1.5 rounded-full text-xs font-semibold bg-rose-500/20 text-rose-400 border border-rose-500/30';
+        });
+
+        let lastRecordedStatus = "";
+
+        client.on('message', (topic, message) => {
+            try {
+                const data = JSON.parse(message.toString());
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString();
+                const dateTimeLabel = now.toLocaleDateString([], {day:'2-digit', month:'2-digit'}) + ' ' + timeStr;
+                const dateTimeStr = now.toLocaleDateString() + ' ' + timeStr;
+
+                // Atualiza Estado Painel
+                document.getElementById('solar-v').textContent = Number(data.solar_v).toFixed(2);
+                document.getElementById('solar-w').textContent = Number(data.solar_w).toFixed(2);
+                document.getElementById('temp-1').textContent = Number(data.temp_dht22_1).toFixed(1);
+                document.getElementById('hum-1').textContent = Number(data.hum_dht22_1).toFixed(1);
+
+                // Atualiza Estado Bateria
+                document.getElementById('bateria-v').textContent = Number(data.bateria_v).toFixed(2);
+                document.getElementById('carga-w').textContent = Number(data.carga_w).toFixed(2);
+                document.getElementById('temp-2').textContent = Number(data.temp_dht22_2).toFixed(1);
+                document.getElementById('hum-2').textContent = Number(data.hum_dht22_2).toFixed(1);
+
+                // Previsão do Tempo & Diagnóstico IA
+                const weatherText = document.getElementById('weather-text');
+                const weatherIcon = document.getElementById('weather-icon');
+                
+                if (data.risco_chuva) {
+                    weatherIcon.textContent = "🌧️";
+                    weatherText.textContent = "Possibilidade de Chuva / Frente Fria";
+                } else if (data.solar_v < 2.0) {
+                    weatherIcon.textContent = "🌥️";
+                    weatherText.textContent = "Sombreamento / Pouca Luz Solar";
+                } else {
+                    weatherIcon.textContent = "☀️";
+                    weatherText.textContent = "Tempo Aberto / Operação Normal";
+                }
+
+                document.getElementById('ai-status-text').textContent = data.status;
+
+                // Armazena no Histórico do Gráfico
+                rawTelemetryHistory.push({
+                    timestamp: now,
+                    timeLabel: timeStr,
+                    dateTimeLabel: dateTimeLabel,
+                    bateria_v: Number(data.bateria_v),
+                    solar_v: Number(data.solar_v)
+                });
+                updateChartDisplay();
+
+                // Log na Tabela
+                const isCritical = data.status.includes("EMERGÊNCIA") || data.status.includes("ALERTA") || data.risco_chuva || data.falha_painel;
+                if (data.status !== lastRecordedStatus || isCritical) {
+                    eventLogs.unshift({
+                        timestamp: now,
+                        dateTimeStr: dateTimeStr,
+                        status: data.status,
+                        bateria_v: Number(data.bateria_v),
+                        solar_v: Number(data.solar_v),
+                        temp: Number(data.temp_dht22_1),
+                        hum: Number(data.hum_dht22_1),
+                        isCritical: isCritical
+                    });
+                    lastRecordedStatus = data.status;
+                    renderTable();
+                }
+
+                saveToStorage();
+
+            } catch (e) {
+                console.error("Erro ao decodificar JSON MQTT:", e);
+            }
+        });
+    </script>
+</body>
+</html>
